@@ -115,12 +115,302 @@
         let selectedAnimalIndex = 0;
         let activePowerup = null; 
         let powerupTimer = 0;
+        let day_night_timer = 0;
+        let day_count = 0;
         const POWERUP_DURATION = 420;
-        const GRAVITY = 0.5;
-        const JUMP_STRENGTH = -13.5;
+        const GRAVITY = 0.7;
+        const JUMP_STRENGTH = -16;
         const INITIAL_GAME_SPEED = 4;
         const GAME_SPEED_INCREASE = 0.001;
         const GROUND_HEIGHT = canvasHeight - 50;
+        const SAFE_LANDING_ZONE = 210;
+        const DAY_DURATION = 7200; // 2 minutes at 60fps
+
+        const sky_colors = {
+            dawn: ['#f8a558', '#7ec4e6', '#32569f'],
+            day: ['#1e90ff', '#87ceeb', '#f0f8ff'],
+            dusk: ['#ff7e5f', '#feb47b', '#1e2c5e'],
+            night: ['#000033', '#1a202c', '#3c4f76']
+        };
+
+        function drawRat(player) {
+            ctx.strokeStyle = '#2a201d';
+            ctx.lineWidth = 1;
+
+            // Colors
+            const bodyColor = '#826a5c';
+            const bellyColor = '#c7b2a6';
+            const shadowColor = '#5e483c';
+            const earColor = '#d4a9a9';
+            const tailColor = '#d4a9a9';
+            const eyeColor = '#111';
+
+            // Tail
+            ctx.fillStyle = tailColor;
+            ctx.strokeStyle = shadowColor;
+            ctx.beginPath();
+            const tailOffsetY = (player.currentFrame % 2 === 0) && !player.isJumping ? 3 : 0;
+            ctx.moveTo(5, player.height * 0.7);
+            ctx.bezierCurveTo(-15, player.height * 1.2 + tailOffsetY, -35, player.height, -45, player.height * 0.8);
+            ctx.bezierCurveTo(-30, player.height * 0.4 + tailOffsetY, 0, player.height * 0.6, 5, player.height * 0.7);
+            ctx.fill();
+            ctx.stroke();
+
+            // Body
+            const bodyGradient = ctx.createRadialGradient(player.width * 0.4, player.height * 0.3, 5, player.width * 0.5, player.height * 0.5, player.width * 0.8);
+            bodyGradient.addColorStop(0, bellyColor);
+            bodyGradient.addColorStop(0.5, bodyColor);
+            bodyGradient.addColorStop(1, shadowColor);
+            ctx.fillStyle = bodyGradient;
+
+            // Legs
+            let legX1, legX2, legY1, legY2;
+            switch(player.currentFrame) {
+                case 0: legX1 = player.width * 0.2; legX2 = player.width * 0.7; legY1 = player.height * 0.95; legY2 = player.height * 0.9; break;
+                case 1: legX1 = player.width * 0.45; legX2 = player.width * 0.55; legY1 = player.height * 0.9; legY2 = player.height * 0.95; break;
+                case 2: legX1 = player.width * 0.7; legX2 = player.width * 0.2; legY1 = player.height * 0.95; legY2 = player.height * 0.9; break;
+                case 3: legX1 = player.width * 0.55; legX2 = player.width * 0.45; legY1 = player.height * 0.9; legY2 = player.height * 0.95; break;
+            }
+
+            if (!player.isJumping) {
+                // Back leg
+                ctx.beginPath(); ctx.ellipse(legX2, legY2, player.width*0.18, player.width*0.11, -0.3, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                // Front leg
+                ctx.beginPath(); ctx.ellipse(legX1, legY1, player.width*0.2, player.width*0.12, 0.5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            }
+
+            // Main Body Shape
+            ctx.beginPath();
+            ctx.moveTo(player.width * 0.1, player.height * 0.7);
+            ctx.ellipse(player.width * 0.4, player.height * 0.7, player.width * 0.4, player.height * 0.35, 0.1, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Head
+            ctx.beginPath();
+            ctx.ellipse(player.width * 0.8, player.height * 0.55, player.width * 0.28, player.height * 0.3, -0.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Snout
+            ctx.beginPath();
+            ctx.moveTo(player.width*0.95, player.height*0.5);
+            ctx.bezierCurveTo(player.width*1.1, player.height*0.6, player.width*1.1, player.height*0.8, player.width, player.height*0.85);
+            ctx.stroke();
+
+            // Ear
+            ctx.fillStyle = earColor;
+            ctx.beginPath();
+            ctx.ellipse(player.width*0.5, player.height*0.3, 9, 12, 0.8, 0, Math.PI*2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(player.width*0.52, player.height*0.35, 5, 7, 0.8, 0, Math.PI*2);
+            ctx.fill();
+
+            // Eye
+            ctx.fillStyle = eyeColor;
+            ctx.beginPath();
+            ctx.arc(player.width*0.85, player.height*0.45, 4, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(player.width*0.87, player.height*0.43, 1.5, 0, Math.PI*2);
+            ctx.fill();
+
+            // Whiskers
+            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(player.width, player.height*0.7);
+            ctx.lineTo(player.width*1.2, player.height*0.65);
+            ctx.moveTo(player.width, player.height*0.75);
+            ctx.lineTo(player.width*1.25, player.height*0.75);
+            ctx.moveTo(player.width, player.height*0.8);
+            ctx.lineTo(player.width*1.2, player.height*0.85);
+            ctx.stroke();
+        }
+
+        function drawRaccoon(player) {
+            ctx.strokeStyle = '#1a202c';
+            ctx.lineWidth = 1;
+
+            // Colors
+            const bodyColor = '#6b7280';
+            const bellyColor = '#d1d5db';
+            const shadowColor = '#374151';
+            const maskColor = '#1f2937';
+            const earColor = '#9ca3af';
+            const tailStripeColor = '#1f2937';
+
+            // Tail
+            const tailGrad = ctx.createLinearGradient(-70, 0, 0, 0);
+            tailGrad.addColorStop(0, bodyColor);
+            tailGrad.addColorStop(0.1, tailStripeColor);
+            tailGrad.addColorStop(0.2, bodyColor);
+            tailGrad.addColorStop(0.3, tailStripeColor);
+            tailGrad.addColorStop(0.4, bodyColor);
+            tailGrad.addColorStop(0.5, tailStripeColor);
+            tailGrad.addColorStop(0.6, bodyColor);
+            tailGrad.addColorStop(0.7, tailStripeColor);
+            tailGrad.addColorStop(0.8, bodyColor);
+            ctx.fillStyle = tailGrad;
+            ctx.beginPath();
+            ctx.moveTo(0, player.height * 0.8);
+            ctx.bezierCurveTo(-40, player.height * 1.3, -60, player.height * 0.3, -70, player.height * 0.7);
+            ctx.bezierCurveTo(-60, player.height * 1.3, -40, player.height * 1.5, 0, player.height * 0.9);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Body
+            const bodyGradient = ctx.createRadialGradient(player.width * 0.4, player.height * 0.3, 5, player.width * 0.5, player.height * 0.5, player.width);
+            bodyGradient.addColorStop(0, bellyColor);
+            bodyGradient.addColorStop(0.4, bodyColor);
+            bodyGradient.addColorStop(1, shadowColor);
+            ctx.fillStyle = bodyGradient;
+
+            // Leg animation
+            let legX1, legX2;
+            switch(player.currentFrame) {
+                case 0: legX1 = player.width * 0.15; legX2 = player.width * 0.75; break;
+                case 1: legX1 = player.width * 0.45; legX2 = player.width * 0.6; break;
+                case 2: legX1 = player.width * 0.75; legX2 = player.width * 0.15; break;
+                case 3: legX1 = player.width * 0.6; legX2 = player.width * 0.45; break;
+            }
+
+            if (!player.isJumping) {
+                ctx.beginPath(); ctx.ellipse(legX2, player.height, player.width*0.22, player.width*0.1, -0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(legX1, player.height, player.width*0.25, player.width*0.1, 0.4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            }
+
+            // Main Body
+            ctx.beginPath();
+            ctx.ellipse(player.width * 0.3, player.height * 0.7, player.width * 0.4, player.height * 0.4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Head
+            ctx.beginPath();
+            ctx.ellipse(player.width * 0.75, player.height * 0.5, player.width * 0.3, player.height * 0.35, -0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Face mask
+            ctx.fillStyle = maskColor;
+            ctx.beginPath();
+            ctx.ellipse(player.width * 0.78, player.height * 0.55, player.width * 0.2, player.height * 0.25, -0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(player.width * 0.8, player.height * 0.45, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(player.width * 0.81, player.height * 0.45, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ears
+            ctx.fillStyle = earColor;
+            ctx.beginPath();
+            ctx.moveTo(player.width * 0.6, player.height * 0.2);
+            ctx.quadraticCurveTo(player.width*0.5, -5, player.width*0.4, player.height*0.2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        function drawSquirrel(player) {
+            ctx.strokeStyle = '#4d2c1d';
+            ctx.lineWidth = 1;
+
+            // Colors
+            const bodyColor = '#d97706';
+            const bellyColor = '#fef3c7';
+            const shadowColor = '#92400e';
+            const earColor = '#b45309';
+            const eyeColor = '#111';
+
+            // Tail
+            const tailGrad = ctx.createRadialGradient(30, 0, 10, 30, 0, player.height * 1.5);
+            tailGrad.addColorStop(0, '#f59e0b');
+            tailGrad.addColorStop(0.5, bodyColor);
+            tailGrad.addColorStop(1, shadowColor);
+            ctx.fillStyle = tailGrad;
+            ctx.beginPath();
+            ctx.moveTo(0, player.height * 0.8);
+            ctx.bezierCurveTo(40, -player.height * 0.8, 80, -player.height * 0.5, 60, player.height);
+            ctx.bezierCurveTo(50, player.height * 0.5, 20, player.height * 0.4, 0, player.height * 0.8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Body
+            const bodyGradient = ctx.createRadialGradient(player.width * 0.5, player.height * 0.5, 5, player.width * 0.5, player.height * 0.5, player.width * 0.7);
+            bodyGradient.addColorStop(0, bellyColor);
+            bodyGradient.addColorStop(0.5, bodyColor);
+            bodyGradient.addColorStop(1, shadowColor);
+            ctx.fillStyle = bodyGradient;
+
+            // Leg animation
+            let legX1, legX2;
+            switch(player.currentFrame) {
+                case 0: legX1 = player.width * 0.2; legX2 = player.width * 0.7; break;
+                case 1: legX1 = player.width * 0.45; legX2 = player.width * 0.55; break;
+                case 2: legX1 = player.width * 0.7; legX2 = player.width * 0.2; break;
+                case 3: legX1 = player.width * 0.55; legX2 = player.width * 0.45; break;
+            }
+
+            if (!player.isJumping) {
+                ctx.beginPath(); ctx.ellipse(legX2, player.height * 0.9, player.width * 0.15, player.width * 0.1, -0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(legX1, player.height * 0.9, player.width * 0.15, player.width * 0.1, 0.4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            }
+
+            // Main Body
+            ctx.beginPath();
+            ctx.moveTo(10, player.height * 0.6);
+            ctx.bezierCurveTo(20, -5, 50, 0, 55, player.height * 0.7);
+            ctx.lineTo(50, player.height);
+            ctx.lineTo(15, player.height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Belly patch
+            ctx.fillStyle = bellyColor;
+            ctx.beginPath();
+            ctx.ellipse(35, player.height * 0.8, 15, 8, 0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Head
+            ctx.fillStyle = bodyGradient;
+            ctx.beginPath();
+            ctx.ellipse(player.width * 0.8, player.height * 0.4, player.width * 0.2, player.height * 0.25, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Ear
+            ctx.fillStyle = earColor;
+            ctx.beginPath();
+            ctx.moveTo(player.width*0.7, player.height*0.2);
+            ctx.lineTo(player.width*0.75, 0);
+            ctx.lineTo(player.width*0.8, player.height*0.2);
+            ctx.closePath();
+            ctx.fill();
+
+            // Eye
+            ctx.fillStyle = eyeColor;
+            ctx.beginPath();
+            ctx.arc(player.width * 0.85, player.height * 0.35, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(player.width * 0.86, player.height * 0.34, 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         const animals = [
             {
@@ -129,39 +419,7 @@
                 abilityDesc: "Ability: Coin Magnet",
                 abilityDuration: 180, 
                 abilityCooldownTime: 600,
-                draw: function(player) {
-                    ctx.strokeStyle = '#2a201d'; ctx.lineWidth = 0.5;
-                    const bodyGradient = ctx.createLinearGradient(0, -player.height*0.5, 0, player.height*1.5);
-                    bodyGradient.addColorStop(0, '#a69086'); bodyGradient.addColorStop(0.5, '#745d54'); bodyGradient.addColorStop(1, '#4f3b35');
-                    ctx.fillStyle = '#c5a9a9'; ctx.beginPath();
-                    const tailOffsetY = player.currentFrame === 0 && !player.isJumping ? 2 : 0;
-                    ctx.moveTo(5, player.height * 0.7);
-                    ctx.bezierCurveTo(-10, player.height*1.1 + tailOffsetY, -30, player.height, -40, player.height*0.8);
-                    ctx.bezierCurveTo(-25, player.height*0.4 + tailOffsetY, 0, player.height*0.6, 5, player.height*0.7);
-                    ctx.fill(); ctx.stroke();
-                    ctx.fillStyle = bodyGradient;
-                    const legX1 = player.currentFrame === 0 ? player.width * 0.2 : player.width * 0.45;
-                    const legX2 = player.currentFrame === 0 ? player.width * 0.7 : player.width * 0.55;
-                    if (!player.isJumping) {
-                        ctx.beginPath(); ctx.ellipse(legX1, player.height * 0.95, player.width*0.2, player.width*0.12, 0.5, 0, Math.PI*2); ctx.fill(); ctx.stroke(); 
-                        ctx.beginPath(); ctx.ellipse(legX2, player.height * 0.9, player.width*0.18, player.width*0.11, -0.3, 0, Math.PI*2); ctx.fill(); ctx.stroke(); 
-                    }
-                    ctx.beginPath();
-                    ctx.moveTo(0, player.height * 0.7);
-                    ctx.bezierCurveTo(player.width * 0.2, -player.height * 0.4, player.width * 0.6, -player.height * 0.2, player.width * 0.8, player.height * 0.5);
-                    ctx.ellipse(player.width * 0.25, player.height * 0.7, player.width * 0.3, player.height * 0.4, 0.2, 0, Math.PI * 2);
-                    ctx.fill(); ctx.stroke();
-                    ctx.beginPath();
-                    ctx.ellipse(player.width * 0.85, player.height * 0.6, player.width * 0.25, player.height * 0.3, -0.2, 0, Math.PI * 2);
-                    ctx.fill(); ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(player.width*0.9, player.height*0.6); ctx.bezierCurveTo(player.width*1.05, player.height*0.7, player.width*1.05, player.height*0.9, player.width*0.95, player.height);
-                    ctx.fill(); ctx.stroke();
-                    ctx.fillStyle = '#c5a9a9'; ctx.beginPath(); ctx.ellipse(player.width*0.5, player.height*0.3, 8, 10, 0.8, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(player.width*0.5, player.height*0.3, 5, 7, 0.8, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(player.width*0.88, player.height*0.5, 3, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(player.width*0.9, player.height*0.48, 1, 0, Math.PI*2); ctx.fill();
-                }
+                draw: drawRat
             },
             {
                 name: "RATON LAVEUR",
@@ -169,36 +427,7 @@
                 abilityDesc: "Ability: Break Obstacle",
                 abilityDuration: 5, 
                 abilityCooldownTime: 900,
-                draw: function(player) {
-                    ctx.strokeStyle = '#111827'; ctx.lineWidth = 1;
-                    const tailGrad = ctx.createLinearGradient(-70, 0, 0, 0);
-                    tailGrad.addColorStop(0, '#6B7280'); tailGrad.addColorStop(0.15, '#1F2937'); tailGrad.addColorStop(0.3, '#6B7280');
-                    tailGrad.addColorStop(0.45, '#1F2937'); tailGrad.addColorStop(0.6, '#6B7280'); tailGrad.addColorStop(0.75, '#1F2937');
-                    ctx.fillStyle = tailGrad;
-                    ctx.beginPath();
-                    ctx.moveTo(0, player.height*0.8); ctx.bezierCurveTo(-40, player.height*1.2, -60, player.height*0.2, -70, player.height*0.6);
-                    ctx.bezierCurveTo(-60, player.height*1.2, -40, player.height*1.4, 0, player.height*0.8);
-                    ctx.fill(); ctx.stroke();
-                    const bodyGradient = ctx.createLinearGradient(0, -player.height*0.3, 0, player.height);
-                    bodyGradient.addColorStop(0, '#9CA3AF'); bodyGradient.addColorStop(1, '#374151');
-                    ctx.fillStyle = bodyGradient;
-                    const legX1 = player.currentFrame === 0 ? player.width * 0.15 : player.width * 0.45;
-                    const legX2 = player.currentFrame === 0 ? player.width * 0.75 : player.width * 0.6;
-                    if(!player.isJumping) {
-                        ctx.beginPath(); ctx.ellipse(legX1, player.height, player.width*0.25, player.width*0.1, 0.4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                        ctx.beginPath(); ctx.ellipse(legX2, player.height, player.width*0.22, player.width*0.1, -0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                    }
-                    ctx.beginPath();
-                    ctx.ellipse(player.width*0.3, player.height*0.7, player.width*0.4, player.height*0.4, 0, 0, Math.PI*2);
-                    ctx.fill(); ctx.stroke();
-                    ctx.beginPath();
-                    ctx.ellipse(player.width*0.75, player.height*0.5, player.width*0.3, player.height*0.35, -0.3, 0, Math.PI*2);
-                    ctx.fill(); ctx.stroke();
-                    ctx.fillStyle = 'white'; ctx.beginPath(); ctx.ellipse(player.width*0.75, player.height*0.5, player.width*0.28, player.height*0.3, -0.3, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = '#1F2937'; ctx.beginPath(); ctx.ellipse(player.width*0.78, player.height*0.55, player.width*0.2, player.height*0.25, -0.3, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(player.width*0.85, player.height*0.45, 4, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(player.width*0.86, player.height*0.45, 2, 0, Math.PI*2); ctx.fill();
-                }
+                draw: drawRaccoon
             },
             {
                 name: "ÉCUREUIL",
@@ -206,30 +435,7 @@
                 abilityDesc: "Ability: Glide",
                 abilityDuration: 120, 
                 abilityCooldownTime: 480,
-                draw: function(player) {
-                    ctx.strokeStyle = '#4d2c1d'; ctx.lineWidth = 1;
-                    const tailGrad = ctx.createLinearGradient(0,-player.height,0,player.height);
-                    tailGrad.addColorStop(0, '#d97706'); tailGrad.addColorStop(1, '#92400e');
-                    ctx.fillStyle = tailGrad;
-                    ctx.beginPath(); ctx.moveTo(0, player.height * 0.8);
-                    ctx.bezierCurveTo(30, -player.height*0.7, 70, -player.height*0.4, 50, player.height);
-                    ctx.bezierCurveTo(40, player.height*0.5, 20, player.height*0.4, 0, player.height*0.8);
-                    ctx.closePath(); ctx.fill(); ctx.stroke();
-                    const bodyGradient = ctx.createLinearGradient(0, 0, 0, player.height);
-                    bodyGradient.addColorStop(0, '#f59e0b'); bodyGradient.addColorStop(1, '#b45309');
-                    ctx.fillStyle = bodyGradient;
-                    const legX1 = player.currentFrame === 0 ? player.width * 0.2 : player.width * 0.45;
-                    const legX2 = player.currentFrame === 0 ? player.width * 0.7 : player.width * 0.55;
-                     if(!player.isJumping) {
-                        ctx.beginPath(); ctx.ellipse(legX1, player.height*0.9, player.width*0.15, player.width*0.1, 0.4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                        ctx.beginPath(); ctx.ellipse(legX2, player.height*0.9, player.width*0.15, player.width*0.1, -0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                    }
-                    ctx.beginPath(); ctx.moveTo(10, player.height*0.6); ctx.bezierCurveTo(20,-5, 50, 0, 55, player.height*0.7);
-                    ctx.lineTo(50, player.height); ctx.lineTo(15, player.height); ctx.closePath(); ctx.fill(); ctx.stroke();
-                    ctx.fillStyle = '#fef3c7'; ctx.beginPath(); ctx.ellipse(35, player.height*0.8, 15, 8, 0.3, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(50, player.height*0.5, 3, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(51, player.height*0.48, 0.8, 0, Math.PI*2); ctx.fill();
-                }
+                draw: drawSquirrel
             }
         ];
 
@@ -242,6 +448,12 @@
                 let onPlatform = false; let lastY = this.y;
                 this.velocityY += GRAVITY;
                 if(this.animal.name === "ÉCUREUIL" && this.abilityActive && this.velocityY > 0) { this.velocityY -= GRAVITY * 0.6; }
+
+                // Variable jump height
+                if (this.velocityY < 0 && !this.isJumpButtonHeld) {
+                    this.velocityY = Math.max(this.velocityY, -6);
+                }
+
                 this.y += this.velocityY;
 
                 for(const platform of platforms) {
@@ -253,7 +465,7 @@
                 }
                 if (!this.isJumping) {
                     this.animationTimer++;
-                    if (this.animationTimer > 5) { this.currentFrame = (this.currentFrame + 1) % 2; this.animationTimer = 0; }
+                    if (this.animationTimer > 4) { this.currentFrame = (this.currentFrame + 1) % 4; this.animationTimer = 0; }
                 }
                 if(this.y > canvasHeight + 50) { gameState = 'gameOver'; }
                 if(this.abilityCooldown > 0) this.abilityCooldown--;
@@ -329,8 +541,11 @@
                         case 'puddle': oheight = 10; owidth = 60; oy = newPlatform.y - oheight; break;
                         case 'snake': oheight = 20; owidth = 50; oy = newPlatform.y - oheight; break;
                     }
-                    ox = newPlatform.x + Math.random() * (newPlatform.width - owidth);
-                    obstacles.push(new Obstacle(type, ox, oy, owidth, oheight, ocolor));
+                    const spawnableWidth = newPlatform.width - owidth - SAFE_LANDING_ZONE;
+                    if (spawnableWidth > 0) {
+                        ox = newPlatform.x + SAFE_LANDING_ZONE + Math.random() * spawnableWidth;
+                        obstacles.push(new Obstacle(type, ox, oy, owidth, oheight, ocolor));
+                    }
                 }
 
                 // --- NEW: Spawn coins on platforms ---
@@ -355,6 +570,7 @@
                 if ( player.x < o.x + o.width && player.x + player.width > o.x && player.y < o.y + o.height && player.y + player.height > o.y ) {
                     if (player.animal.name === "RATON LAVEUR" && player.abilityActive) {
                         obstacles.splice(i, 1);
+                        player.abilityActive = false;
                     }
                     else if (activePowerup === 'shield') {
                         obstacles.splice(i, 1); activePowerup = null; powerupTimer = 0;
@@ -366,7 +582,71 @@
         }
 
         function drawBackground() { 
-            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvasHeight); skyGradient.addColorStop(0, '#1e2c5e'); skyGradient.addColorStop(0.6, '#9b4a73'); skyGradient.addColorStop(1, '#ff7e5f'); ctx.fillStyle = skyGradient; ctx.fillRect(0, 0, canvasWidth, canvasHeight); ctx.fillStyle = 'rgba(255, 239, 213, 0.8)'; ctx.beginPath(); ctx.arc(canvasWidth * 0.85, canvasHeight * 0.2, 30, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#1a202c'; ctx.beginPath(); ctx.moveTo(0, canvasHeight); distantShore.forEach(seg => { const x = seg.x1 - (bridgeOffset * 0.25); ctx.lineTo(x, seg.y1); }); ctx.lineTo(canvasWidth, canvasHeight); ctx.closePath(); ctx.fill(); bridgeOffset -= gameSpeed * 0.2; if (bridgeOffset < -550) bridgeOffset += 550; drawBridge(bridgeOffset); 
+            const cycle_progress = (day_night_timer % DAY_DURATION) / DAY_DURATION;
+            let from_colors, to_colors, blend_factor;
+
+            if (cycle_progress < 0.25) { // Dawn
+                from_colors = sky_colors.night;
+                to_colors = sky_colors.dawn;
+                blend_factor = cycle_progress / 0.25;
+            } else if (cycle_progress < 0.5) { // Day
+                from_colors = sky_colors.dawn;
+                to_colors = sky_colors.day;
+                blend_factor = (cycle_progress - 0.25) / 0.25;
+            } else if (cycle_progress < 0.75) { // Dusk
+                from_colors = sky_colors.day;
+                to_colors = sky_colors.dusk;
+                blend_factor = (cycle_progress - 0.5) / 0.25;
+            } else { // Night
+                from_colors = sky_colors.dusk;
+                to_colors = sky_colors.night;
+                blend_factor = (cycle_progress - 0.75) / 0.25;
+            }
+
+            const sky_color_1 = lerpColor(from_colors[0], to_colors[0], blend_factor);
+            const sky_color_2 = lerpColor(from_colors[1], to_colors[1], blend_factor);
+            const sky_color_3 = lerpColor(from_colors[2], to_colors[2], blend_factor);
+
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+            skyGradient.addColorStop(0, sky_color_1);
+            skyGradient.addColorStop(0.6, sky_color_2);
+            skyGradient.addColorStop(1, sky_color_3);
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // Sun/Moon
+            const sun_moon_y = canvasHeight * 0.2;
+            const sun_moon_x = canvasWidth * 0.85;
+            const sun_moon_cycle = Math.sin(cycle_progress * Math.PI * 2);
+            if (sun_moon_cycle > -0.2) { // Sun
+                 ctx.fillStyle = `rgba(255, 239, 213, ${sun_moon_cycle})`;
+                 ctx.beginPath();
+                 ctx.arc(sun_moon_x, sun_moon_y, 30, 0, Math.PI * 2);
+                 ctx.fill();
+            } else { // Moon
+                 ctx.fillStyle = `rgba(240, 240, 255, ${-sun_moon_cycle})`;
+                 ctx.beginPath();
+                 ctx.arc(sun_moon_x, sun_moon_y, 25, 0, Math.PI * 2);
+                 ctx.fill();
+                 ctx.fillStyle = `rgba(200, 200, 220, ${-sun_moon_cycle * 0.5})`;
+                 ctx.beginPath();
+                 ctx.arc(sun_moon_x-5, sun_moon_y-5, 3, 0, Math.PI * 2);
+                 ctx.fill();
+                 ctx.beginPath();
+                 ctx.arc(sun_moon_x+10, sun_moon_y+10, 5, 0, Math.PI * 2);
+                 ctx.fill();
+            }
+
+            ctx.fillStyle = '#1a202c';
+            ctx.beginPath();
+            ctx.moveTo(0, canvasHeight);
+            distantShore.forEach(seg => { const x = seg.x1 - (bridgeOffset * 0.25); ctx.lineTo(x, seg.y1); });
+            ctx.lineTo(canvasWidth, canvasHeight);
+            ctx.closePath();
+            ctx.fill();
+            bridgeOffset -= gameSpeed * 0.2;
+            if (bridgeOffset < -550) bridgeOffset += 550;
+            drawBridge(bridgeOffset);
         }
         function drawUI() { 
             ctx.fillStyle = '#FBBF24'; ctx.font = '20px "Press Start 2P"'; ctx.textAlign = 'left'; ctx.fillText(`Score: ${score}`, 20, 40); 
@@ -392,6 +672,21 @@
         function showStartScreen() { ctx.clearRect(0, 0, canvasWidth, canvasHeight); drawBackground(); drawPlatforms(); player.draw(); ctx.textAlign = 'center'; ctx.fillStyle = 'white'; ctx.font = '30px "Press Start 2P"'; ctx.fillText('COURS PETIT ' + player.animal.name, canvasWidth / 2, canvasHeight / 2 - 40); ctx.font = '16px "Press Start 2P"'; ctx.fillText('Click or Press Space to Start', canvasWidth / 2, canvasHeight / 2); titleElement.style.display = 'block'; instructionsElement.style.display = 'block'; instructionsElement.textContent = "Space: Jump | ArrowDown: Duck | E: Ability | P: Pause"; }
         function showGameOverScreen() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight); ctx.textAlign = 'center'; ctx.fillStyle = '#EF4444'; ctx.font = '40px "Press Start 2P"'; ctx.fillText('GAME OVER', canvasWidth / 2, canvasHeight / 2 - 60); ctx.fillStyle = 'white'; ctx.font = '20px "Press Start 2P"'; ctx.fillText(`Score: ${score}`, canvasWidth / 2, canvasHeight / 2); if (score > highscore) { ctx.fillStyle = '#FBBF24'; ctx.fillText('New High Score!', canvasWidth / 2, canvasHeight / 2 + 30); highscore = score; localStorage.setItem('refineryRatHighscore', highscore); } ctx.fillStyle = 'white'; ctx.font = '16px "Press Start 2P"'; ctx.fillText('Click to Restart', canvasWidth / 2, canvasHeight / 2 + 80); instructionsElement.textContent = 'Game Over! Click to Restart'; }
         
+        function lerpColor(color1, color2, factor) {
+            const r1 = parseInt(color1.substring(1, 3), 16);
+            const g1 = parseInt(color1.substring(3, 5), 16);
+            const b1 = parseInt(color1.substring(5, 7), 16);
+            const r2 = parseInt(color2.substring(1, 3), 16);
+            const g2 = parseInt(color2.substring(3, 5), 16);
+            const b2 = parseInt(color2.substring(5, 7), 16);
+
+            const r = Math.round(r1 + factor * (r2 - r1));
+            const g = Math.round(g1 + factor * (g2 - g1));
+            const b = Math.round(b1 + factor * (b2 - b1));
+
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
         function init() { 
             score = 0; gameSpeed = INITIAL_GAME_SPEED; obstacles = []; coins = []; powerups = []; 
             scorePopups = []; frame = 0; 
@@ -412,9 +707,13 @@
             else if (gameState === 'start') { showStartScreen(); } 
             else if (gameState === 'playing') {
                 frame++; score++; gameSpeed += GAME_SPEED_INCREASE;
-                if (score > 0 && score % 1500 === 0) {
-                    gameSpeed += 0.5; speedBoostMessage.text = 'SPEED BOOST!';
-                    speedBoostMessage.timer = 60; speedBoostMessage.alpha = 1.0;
+                day_night_timer++;
+                if (day_night_timer > 0 && day_night_timer % DAY_DURATION === 0) {
+                    day_count++;
+                    gameSpeed += 0.5;
+                    speedBoostMessage.text = `DAY ${day_count + 1}`;
+                    speedBoostMessage.timer = 120;
+                    speedBoostMessage.alpha = 1.0;
                 }
                 drawBackground(); 
                 handleLevelGeneration(); 
@@ -422,8 +721,7 @@
 
                 platforms.forEach(p => p.x -= gameSpeed);
                 // --- MODIFIED: Obstacles and coins are moved by their own update functions ---
-                obstacles.forEach(o => o.update()); 
-                coins.forEach(c => c.update());
+                obstacles.forEach(o => o.update());
                 
                 obstacles.forEach(o => o.draw()); 
                 player.update();
