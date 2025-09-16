@@ -355,7 +355,6 @@
                 if ( player.x < o.x + o.width && player.x + player.width > o.x && player.y < o.y + o.height && player.y + player.height > o.y ) {
                     if (player.animal.name === "RATON LAVEUR" && player.abilityActive) {
                         obstacles.splice(i, 1);
-                        player.abilityActive = false; 
                     }
                     else if (activePowerup === 'shield') {
                         obstacles.splice(i, 1); activePowerup = null; powerupTimer = 0;
