@@ -67,7 +67,7 @@
         <div class="text-center">
             <h1 id="title" class="text-3xl lg:text-5xl text-yellow-300 mb-4" style="text-shadow: 2px 2px #000;">LES RATS DE QUAI</h1>
             <canvas id="gameCanvas"></canvas>
-            <p id="instructions" class="mt-4 text-sm lg:text-base">Space: Jump | ArrowDown: Duck | E: Ability | P: Pause</p>
+            <p id="instructions" class="mt-4 text-sm lg:text-base">Space: Jump | ArrowDown: Duck | E: Ability | P: Pause | Shift: Sprint</p>
         </div>
         
         <div id="character-select-ui">
@@ -104,6 +104,8 @@
         let score;
         let highscore = localStorage.getItem('refineryRatHighscore') || 0;
         let gameSpeed;
+        let baseGameSpeed;
+        let sprintMultiplier = 1.0;
         let obstacles = [];
         let coins = [];
         let powerups = []; 
@@ -636,6 +638,15 @@
                     }
                 }
 
+                // --- NEW: Spawn seagulls ---
+                if (Math.random() < 0.15) { // 15% chance per level chunk
+                    const owidth = 50;
+                    const oheight = 40;
+                    const ox = lastPlatform.x + Math.random() * lastPlatform.width; // spawn somewhere over the new platform
+                    const oy = Math.random() * (canvasHeight / 2); // spawn in top half
+                    obstacles.push(new Obstacle('seagull', ox, oy, owidth, oheight, null));
+                }
+
                 // --- NEW: Spawn coins on platforms ---
                  if (Math.random() < 0.7 && newWidth > 200) { 
                     const clusterSize = Math.floor(Math.random() * 5) + 3;
@@ -776,7 +787,7 @@
         }
 
         function init() { 
-            score = 0; gameSpeed = INITIAL_GAME_SPEED; obstacles = []; coins = []; powerups = []; 
+            score = 0; baseGameSpeed = INITIAL_GAME_SPEED; gameSpeed = baseGameSpeed; obstacles = []; coins = []; powerups = [];
             scorePopups = []; frame = 0; 
             platforms = [{x: -100, y: GROUND_HEIGHT, width: canvasWidth + 200, height: 100}];
             player.setCharacter(animals[selectedAnimalIndex]); 
@@ -794,11 +805,13 @@
             }
             else if (gameState === 'start') { showStartScreen(); } 
             else if (gameState === 'playing') {
-                frame++; score++; gameSpeed += GAME_SPEED_INCREASE;
+                frame++; score++;
+                baseGameSpeed += GAME_SPEED_INCREASE;
+                gameSpeed = baseGameSpeed * sprintMultiplier;
                 day_night_timer++;
                 if (day_night_timer > 0 && day_night_timer % DAY_DURATION === 0) {
                     day_count++;
-                    gameSpeed += 0.5;
+                    baseGameSpeed += 0.5;
                     speedBoostMessage.text = `DAY ${day_count + 1}`;
                     speedBoostMessage.timer = 120;
                     speedBoostMessage.alpha = 1.0;
@@ -857,6 +870,9 @@
         });
 
         window.addEventListener('keydown', (e) => {
+            if (e.key === 'Shift') {
+                sprintMultiplier = 1.5;
+            }
             if (gameState === 'characterSelect') {
                 if (e.code === 'ArrowLeft') changeCharacter(-1);
                 if (e.code === 'ArrowRight') changeCharacter(1);
@@ -873,6 +889,9 @@
             if(e.code === 'KeyE' && !e.repeat) { if(gameState === 'playing') player.activateAbility(); }
         });
         window.addEventListener('keyup', (e) => {
+            if (e.key === 'Shift') {
+                sprintMultiplier = 1.0;
+            }
             if (e.code === 'Space') { releaseInput(); }
             if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault(); if (gameState === 'playing') player.standUp(); }
         });
